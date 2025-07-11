@@ -14,7 +14,15 @@ from io import BytesIO
 # —————— Crédito del autor ——————
 st.markdown("**Creado por:** Javier Parada  \n**Ingeniero de Soporte en Campo**")
 st.title("Reordenador Excel a formato MobilServ")
-
+# —————— Instrucciones de uso ——————
+st.markdown("**Cómo usar esta herramienta:**")
+st.markdown(
+    """
+    1. Sube tu archivo Excel (.xlsx) usando el selector de abajo.
+    2. Espera a que se procese y observa la vista previa de las primeras filas.
+    3. Haz clic en "📥 Descargar Excel reordenado" para obtener tu archivo.
+    """
+)
 # —————— Utilitario: Columna Excel → índice 0-based ——————
 def col_letter_to_index(letter: str) -> int:
     idx = 0
