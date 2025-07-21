@@ -11,9 +11,13 @@ import streamlit as st
 import pandas as pd
 from io import BytesIO
 
+# —————— Configuración de la página ——————
+st.set_page_config(page_title="Reordenador Excel a formato MobilServ", layout="wide")
+
 # —————— Crédito del autor ——————
 st.markdown("**Creado por:** Javier Parada  \n**Ingeniero de Soporte en Campo**")
 st.title("Reordenador Excel a formato MobilServ")
+
 # —————— Instrucciones de uso ——————
 st.markdown("**Cómo usar esta herramienta:**")
 st.markdown(
@@ -23,6 +27,7 @@ st.markdown(
     3. Haz clic en "📥 Descargar Excel reordenado" para obtener tu archivo.
     """
 )
+
 # —————— Utilitario: Columna Excel → índice 0-based ——————
 def col_letter_to_index(letter: str) -> int:
     idx = 0
@@ -30,28 +35,68 @@ def col_letter_to_index(letter: str) -> int:
         idx = idx * 26 + (ord(c) - ord("A") + 1)
     return idx - 1
 
-# —————— Mapeo de columnas (origen → destino) ——————
-MOVIMIENTOS = [
-    # Grupo 1
-    *[(o,d) for o,d in [
-        ("A","W"),("Y","B"),("H","C"),("U","E"),("X","F"),("Z","J"),
-        ("V","L"),("W","O"),("E","AA"),("F","AB"),("G","AC"),("I","BB"),
-        ("J","BC"),("K","BD"),("L","BE"),("M","BF"),("N","BG"),("O","I"),("B","R")
-    ]],
-    # Grupo 2
-    *[(o,d) for o,d in [
-        ("HU","FW"),("LK","CC"),("AI","CG"),("EX","CY"),("BW","DA"),("HJ","DS"),
-        ("NY","GT"),("LN","FS"),("IT","ES"),("IN","EM"),("NB","GH"),("NF","EQ"),
-        ("LO","EE"),("OC","GX"),("BI","CK"),("BE","CM"),("BM","CO"),("BL","CQ"),
-        ("IJ","EI"),("IK","EK"),("GY","FA"),("ON","HN"),("BZ","FK"),("EP","FM"),
-        ("EQ","FO"),("EO","FQ")
-    ]],
-    # Grupo 3
-    *[(o,d) for o,d in [
-        ("JD","EW"),("IV","EU"),("IX","GN"),("IY","GP"),("IZ","GR"),("HM","GL"),
-        ("FZ","DY"),("AE","HH"),("CS","HJ"),("EF","PI"),("OF","GZ"),("OG","HB")
-    ]]
-]
+# —————— Mapeo actualizado (columna origen → columna destino) ——————
+mapping_text = """
+A W
+Y B
+H C
+U E
+X F
+Z J
+V L
+W O
+E AA
+F AB
+G AC
+I BB
+J BC
+K BD
+L BE
+M BF
+N BG
+O I
+B R
+IO FW
+MI CC
+AJ CG
+FK CY
+BV DA
+IE DS
+OZ GT
+MK FS
+JQ ES
+JJ EM
+OB GH
+OG EQ
+MM EE
+PD GX
+BI CK
+BD CM
+BM CO
+BL CQ
+JE EI
+JF EK
+HQ FA
+PO HN
+BZ FK
+FB FM
+FC FO
+FA FQ
+KB EW
+JR EU
+JU GN
+JW GP
+JV GR
+IG GL
+GO DY
+AE HH
+CS HJ
+ER PI
+PG GZ
+PH HB
+""".strip()
+
+MOVIMIENTOS = [tuple(line.split()) for line in mapping_text.splitlines()]
 
 # —————— Todos los encabezados (pegados de tu macro VBA) ——————
 headerString = """
@@ -102,7 +147,7 @@ Boron - GR,RESULT_Boron - GR,Cadmium - gr,RESULT_Cadmium - gr,Calcium - GR,RESUL
 Chromium - gr,RESULT_Chromium - gr,Copper - GR,RESULT_Copper - GR,IR Correlation - gr,RESULT_IR Correlation - gr,
 Ferrous Debris - gr,RESULT_Ferrous Debris - gr,Stress Index - Gr,RESULT_Stress Index - Gr,Grease Thief Video,
 RESULT_Grease Thief Video,Iron - GR,RESULT_Iron - GR,Lead - gr,RESULT_Lead - gr,Magnesium - GR,
-RESULT_Magnesium - GR,Manganese - gr,RESULT_Manganese - gr,Molybdenum -gr,RESULT_Molybdenum -gr,
+RESULT_Magnesium - GR,Manganese - GR,RESULT_Manganese - GR,Molybdenum -gr,RESULT_Molybdenum -gr,
 Nickel -gr,RESULT_Nickel -gr,Phosphorus - GR,RESULT_Phosphorus - GR,Potassium - Gr,RESULT_Potassium - Gr,
 Silicon - gr,RESULT_Silicon - gr,Silver - Grease,RESULT_Silver - Grease,Sodium - Gr,RESULT_Sodium - Gr,
 Tin - gr,RESULT_Tin - gr,Titanium - gr,RESULT_Titanium - gr,Vanadium - gr,RESULT_Vanadium - gr,
@@ -140,14 +185,13 @@ NAS particles > 100um,RESULT_NAS particles > 100um,Glycol %,RESULT_Glycol %,
 Blotter Spot C-Index,RESULT_Blotter Spot C-Index,Blotter Spot Diameter,RESULT_Blotter Spot Diameter,
 Blotter Spot Dispersancy,RESULT_Blotter Spot Dispersancy,Blotter Spot Opacity,RESULT_Blotter Spot Opacity,
 Blotter Spot Note,RESULT_Blotter Spot Note
-"""
-# Quitamos saltos de línea y luego rompemos por comas
-headerString = headerString.replace("\n", "")
+""".replace("\n", "")
+
 new_headers = headerString.split(",")
 
 # —————— Especiales ——————
 DATE_COLS   = ["Date Reported","Date Sampled","Date Registered","Date Received"]
-INT_LETTERS = ["BB","BD","BF","CC","CG","CK","CM","CO","CQ","CY","DA","DS","EE","EI","EK","EM","EQ","ES","EW","FA","FM","FO","FQ","FS","FW","GH","GJ","GT","GX","HN"]
+INT_LETTERS = ["BB","BD","BF","CC","CG","CK","CM","CO","CQ","CY","DA","DS","EE","EI","EK","EM","EQ","ES","EW","FA","FM","FO","FQ","FS","FW","GH","GT","GX","HN"]
 DEC_LETTERS = ["DY","GL","GN","GP","GR","GZ","HB","HH","HJ"]
 
 # —————— UI y lógica ——————
@@ -155,18 +199,20 @@ uploaded = st.file_uploader("Sube tu archivo .xlsx", type="xlsx")
 if uploaded:
     df = pd.read_excel(uploaded, header=0, dtype=str)
 
+    # Preparamos el DataFrame resultado
     max_dest = max(col_letter_to_index(d) for _, d in MOVIMIENTOS)
     result   = pd.DataFrame(index=df.index, columns=range(max_dest + 1))
 
+    # Aplicamos el mapeo
     for orig, dest in MOVIMIENTOS:
         i = col_letter_to_index(orig)
         j = col_letter_to_index(dest)
         result.iloc[:, j] = df.iloc[:, i] if i < df.shape[1] else None
 
-    # Asignamos los encabezados (ya coincidirá la longitud)
+    # Asignamos encabezados
     result.columns = new_headers[: result.shape[1]]
 
-    # Hacemos únicos los que se repitan
+    # Hacemos únicos los nombres repetidos
     seen = {}
     cols_unique = []
     for col in result.columns:
@@ -178,26 +224,29 @@ if uploaded:
             cols_unique.append(f"{col} ({seen[col]})")
     result.columns = cols_unique
 
-    # Fechas
+    # Conversión de fechas
     for c in DATE_COLS:
         if c in result:
             result[c] = pd.to_datetime(result[c], errors="coerce").dt.date
 
-    # Enteros y decimales
+    # Conversión a enteros
     for letter in INT_LETTERS:
         idx = col_letter_to_index(letter)
         if idx < result.shape[1]:
             result.iloc[:, idx] = pd.to_numeric(result.iloc[:, idx], errors="coerce").astype("Int64")
+
+    # Conversión a decimales
     for letter in DEC_LETTERS:
         idx = col_letter_to_index(letter)
         if idx < result.shape[1]:
             result.iloc[:, idx] = pd.to_numeric(result.iloc[:, idx], errors="coerce").round(2)
 
-    # Sample Status
+    # Ajuste de Sample Status
     if "Report Status" in result and "Sample Status" in result:
         mask = result["Report Status"].notna()
         result.loc[mask, "Sample Status"] = "Completed"
 
+    # Vista previa y descarga
     st.subheader("Vista previa")
     st.dataframe(result.head(10))
 
