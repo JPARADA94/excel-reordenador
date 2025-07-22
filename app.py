@@ -48,6 +48,7 @@ W O
 E AA
 F AB
 G AC
+C K         # <-- N_MUESTRA → Sample Bottle ID
 I BB
 J BC
 K BD
@@ -96,7 +97,11 @@ PG GZ
 PH HB
 """.strip()
 
-MOVIMIENTOS = [tuple(line.split()) for line in mapping_text.splitlines()]
+# Creamos la lista de tuplas MOVIMIENTOS
+MOVIMIENTOS = [
+    tuple(line.split()[0:2])
+    for line in mapping_text.splitlines()
+]
 
 # —————— Todos los encabezados (pegados de tu macro VBA) ——————
 headerString = """
@@ -118,8 +123,8 @@ RESULT_Ca,Cd (Cadmium),RESULT_Cd,Cl (Chlorine ppm - Xray),RESULT_Cl (Chlorine pp
 Compatibility,RESULT_Compatibility,Coolant Indicator,RESULT_Coolant Indicator,Cr (Chromium),RESULT_Cr,
 Cu (Copper),RESULT_Cu,DAC(%Asphalt.),RESULT_DAC(%Asphalt.),Demul@54C  (min),RESULT_Demul@54C  (min),
 Demul@54C (min),RESULT_Demul@54C (min),Demul@54C (Oil/Water/Emul/Time),RESULT_Demul@54C (Oil/Water/Emul/Time),
-Demulsibility @54C (time-min),RESULT_Demulsibility @54C (time-min),Demulsibility @54C (oil),RESULT_Demulsibility @54C (oil),
-Demulsibility @54C (water),RESULT_Demulsibilidad @54C (water),Demulsibility @54C (emulsion),RESULT_Demulsibility @54C (emulsion),
+Demulsibility @54C (time-min),RESULT_Demulsibilidad @54C (time-min),Demulsibility @54C (oil),RESULT_Demulsibilidad @54C (oil),
+Demulsibility @54C (water),RESULT_Demulsibilidad @54C (water),Demulsibility @54C (emulsion),RESULT_Demulsibilidad @54C (emulsion),
 Fe (Iron),RESULT_Fe (Iron),Foam Seq 1 - stability (ml),RESULT_Foam Seq 1 - stability (ml),Foam Seq 1 - tendency (ml),
 RESULT_Foam Seq 1 - tendency (ml),Fuel Dilut. (Vol%),RESULT_Fuel Dilut. (Vol%),Initial pH,RESULT_Initial pH,
 Insolubles 5u,RESULT_Insolubles 5u,K (Potassium),RESULT_K,MCR,RESULT_MCR,Mg (Magnesium),RESULT_Mg,
@@ -259,3 +264,4 @@ if uploaded:
         file_name="mobilserv_reordenado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
