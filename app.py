@@ -23,8 +23,9 @@ st.markdown("**Cómo usar esta herramienta:**")
 st.markdown(
     """
     1. Sube tu archivo Excel (.xlsx) usando el selector de abajo.
-    2. Espera a que se procese y observa la vista previa de las primeras filas.
-    3. Haz clic en "📥 Descargar Excel reordenado" para obtener tu archivo.
+    2. Revisa la vista previa de los datos originales.
+    3. Espera a que se procese y revisa la vista previa del archivo reordenado.
+    4. Haz clic en "📥 Descargar Excel reordenado" para obtener tu archivo.
     """
 )
 
@@ -48,7 +49,7 @@ W O
 E AA
 F AB
 G AC
-C K         # <-- N_MUESTRA → Sample Bottle ID
+C K         # N_MUESTRA → Sample Bottle ID
 I BB
 J BC
 K BD
@@ -97,13 +98,9 @@ PG GZ
 PH HB
 """.strip()
 
-# Creamos la lista de tuplas MOVIMIENTOS
-MOVIMIENTOS = [
-    tuple(line.split()[0:2])
-    for line in mapping_text.splitlines()
-]
+MOVIMIENTOS = [tuple(line.split()[0:2]) for line in mapping_text.splitlines()]
 
-# —————— Todos los encabezados (pegados de tu macro VBA) ——————
+# —————— Todos los encabezados ——————
 headerString = """
 Sample Status,Report Status,Date Reported,Asset ID,Unit ID,Unit Description,Asset Class,Position,
 Tested Lubricant,Service Level,Sample Bottle ID,Manufacturer,Alt Manufacturer,Model,Alt Model,
@@ -152,23 +149,7 @@ Boron - GR,RESULT_Boron - GR,Cadmium - gr,RESULT_Cadmium - gr,Calcium - GR,RESUL
 Chromium - gr,RESULT_Chromium - gr,Copper - GR,RESULT_Copper - GR,IR Correlation - gr,RESULT_IR Correlation - gr,
 Ferrous Debris - gr,RESULT_Ferrous Debris - gr,Stress Index - Gr,RESULT_Stress Index - Gr,Grease Thief Video,
 RESULT_Grease Thief Video,Iron - GR,RESULT_Iron - GR,Lead - gr,RESULT_Lead - gr,Magnesium - GR,
-RESULT_Magnesium - GR,Manganese - GR,RESULT_Manganese - GR,Molybdenum -gr,RESULT_Molybdenum -gr,
-Nickel -gr,RESULT_Nickel -gr,Phosphorus - GR,RESULT_Phosphorus - GR,Potassium - Gr,RESULT_Potassium - Gr,
-Silicon - gr,RESULT_Silicon - gr,Silver - Grease,RESULT_Silver - Grease,Sodium - Gr,RESULT_Sodium - Gr,
-Tin - gr,RESULT_Tin - gr,Titanium - gr,RESULT_Titanium - gr,Vanadium - gr,RESULT_Vanadium - gr,
-Water - Gr,RESULT_Water - Gr,Zinc - gr,RESULT_Zinc - gr,Fuel Dilution - INDO,RESULT_Fuel Dilution - INDO,
-TBN - INDO,RESULT_TBN - INDO,Soot - INDO,RESULT_Soot - INDO,Water - INDO,RESULT_Water - INDO,
-Oxidation - INDO,RESULT_Oxidation - INDO,Nitration - INDO,RESULT_Nitration - INDO,
-Boron,RESULT_Boron,Barium,RESULT_Barium,Calcium,RESULT_Calcium,Magnesium,RESULT_Magnesium,
-Lithium -gr,RESULT_Lithium -gr,Color -gr,RESULT_Color -gr,Chlorine,RESULT_Chlorine,Lithium,RESULT_Lithium,
-Antimony,RESULT_Antimony,Sulfur,RESULT_Sulfur,Insolubles,RESULT_Insolubles,Aluminum - gr - ICP,
-RESULT_Aluminum - gr - ICP,Antimony - gr- ICP,RESULT_Antimony - gr- ICP,Barium - gr - ICP,
-RESULT_Barium - gr - ICP,Boron - gr - ICP,RESULT_Boron - gr - ICP,Cadmium - gr - ICP,
-RESULT_Cadmium - gr - ICP,Calcium - gr - ICP,RESULT_Calcium - gr - ICP,Chromium - gr - ICP,
-RESULT_Chromium - gr - ICP,Copper - gr - ICP,RESULT_Copper - gr - ICP,Iron - gr - ICP,
-RESULT_Iron - gr - ICP,Lead - gr - ICP,RESULT_Lead - gr - ICP,Lithium - gr - ICP,
-RESULT_Lithium - gr - ICP,Magnesium - gr - ICP,RESULT_Magnesium - gr - ICP,Manganese - gr - ICP,
-RESULT_Manganese - gr - ICP,Molybdneum - gr - ICP,RESULT_Molybdneum - gr - ICP,
+RESULT_Magnesium - GR,Manganese - GR,RESULT_Manganese - GR,Molybdneum - gr - ICP,RESULT_Molybdneum - gr - ICP,
 Nickel - gr - ICP,RESULT_Nickel - gr - ICP,Phosphorus - gr - ICP,RESULT_Phosphorus - gr - ICP,
 Potassium - gr - ICP,RESULT_Potassium - gr - ICP,Silicon - gr - ICP,RESULT_Silicon - gr - ICP,
 Silver - Grease ICP,RESULT_Silver - Grease ICP,Sodium - gr - ICP,RESULT_Sodium - gr - ICP,
@@ -202,22 +183,25 @@ DEC_LETTERS = ["DY","GL","GN","GP","GR","GZ","HB","HH","HJ"]
 # —————— UI y lógica ——————
 uploaded = st.file_uploader("Sube tu archivo .xlsx", type="xlsx")
 if uploaded:
+    # Carga original
     df = pd.read_excel(uploaded, header=0, dtype=str)
+    st.subheader("Vista previa – Datos originales")
+    st.dataframe(df.head(10))
 
-    # Preparamos el DataFrame resultado
+    # Preparar DataFrame resultado
     max_dest = max(col_letter_to_index(d) for _, d in MOVIMIENTOS)
     result   = pd.DataFrame(index=df.index, columns=range(max_dest + 1))
 
-    # Aplicamos el mapeo
+    # Aplicar mapeo
     for orig, dest in MOVIMIENTOS:
         i = col_letter_to_index(orig)
         j = col_letter_to_index(dest)
         result.iloc[:, j] = df.iloc[:, i] if i < df.shape[1] else None
 
-    # Asignamos encabezados
+    # Asignar encabezados
     result.columns = new_headers[: result.shape[1]]
 
-    # Hacemos únicos los nombres repetidos
+    # Unificar nombres duplicados
     seen = {}
     cols_unique = []
     for col in result.columns:
@@ -252,16 +236,15 @@ if uploaded:
         result.loc[mask, "Sample Status"] = "Completed"
 
     # Vista previa y descarga
-    st.subheader("Vista previa")
+    st.subheader("Vista previa – Archivo reordenado")
     st.dataframe(result.head(10))
 
     buf = BytesIO()
     result.to_excel(buf, index=False, engine="openpyxl")
     buf.seek(0)
     st.download_button(
-        "📥 Descargar Excel reordenado",
+        "📥 Descargar Excel Formato MobilServ",
         data=buf,
         file_name="mobilserv_reordenado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
