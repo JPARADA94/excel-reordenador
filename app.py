@@ -12,9 +12,9 @@ st.title("Reordenador Excel a formato MobilServ – Múltiples Archivos (Encabez
 st.markdown("""
 **Flujo de la herramienta:**
 1. Sube **uno o varios archivos Excel (.xlsx)**.
-2. El sistema combinará todos los archivos en un solo DataFrame.
+2. El sistema combinará todos los archivos en un solo archivo.
 3. Verás una **vista previa de los datos combinados originales**.
-4. Luego, el sistema aplicará el **reordenamiento MobilServ** (las columnas `RESULT_XXX` solo son encabezados).
+4. Luego, el sistema aplicará el **reordenamiento MobilServ** .
 5. Se mostrará la **vista previa final sin errores**.
 6. Finalmente podrás **descargar el Excel final MobilServ**.
 """)
