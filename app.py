@@ -20,9 +20,9 @@ st.markdown("""
 4. Descarga el resultado final en Excel.
 """)
 
-# --- Funciones auxiliares ---
+# --- Utilitarios ---
+
 def letter_to_index(letter):
-    """Convierte letra de columna a índice base 0."""
     letter = letter.upper()
     result = 0
     for char in letter:
@@ -30,38 +30,33 @@ def letter_to_index(letter):
     return result - 1
 
 def process_excel_file(df):
-    """Transforma el DataFrame combinado al formato MobilServ."""
-
-    # 1️⃣ Mapeo de columnas origen → destino
+    # 1️⃣ Mapeo origen → destino
     movimientos = [
-        ("A", "W"), ("Y", "B"), ("H", "C"), ("U", "E"), ("X", "F"), ("Z", "J"),
-        ("V", "L"), ("W", "O"), ("E", "AA"), ("F", "AB"), ("C", "K"), ("D", "AH"),
-        ("G", "AC"), ("I", "BB"), ("J", "BC"), ("K", "BD"), ("L", "BE"), ("M", "BF"),
-        ("N", "BG"), ("O", "I"), ("B", "R"),
-        ("IP", "FW"), ("MJ", "CC"), ("AJ", "CG"), ("FL", "CY"), ("BW", "DA"),
-        ("IE", "DS"), ("PA", "GT"), ("MM", "FS"), ("JR", "ES"), ("JL", "EM"),
-        ("OD", "GH"), ("OG", "EQ"), ("MO", "EE"), ("PE", "GX"),
-        ("BJ", "CK"), ("BD", "CM"), ("BN", "CO"), ("BL", "CQ"), ("JF", "EI"),
-        ("JG", "EK"), ("HQ", "FA"), ("PP", "HN"), ("BZ", "FK"),
-        ("FB", "FM"), ("FC", "FO"), ("FA", "FQ"),
-        ("KC", "EW"), ("JS", "EU"), ("JV", "GN"), ("JX", "GP"), ("JW", "GR"),
-        ("IG", "GL"), ("GO", "DY"), ("AE", "HH"), ("CS", "HJ"), ("ER", "PI"),
-        ("PH", "GZ"), ("PI", "HB"), ("C", "K"), ("CE", "EP")
+        ("A","W"),("Y","B"),("H","C"),("U","E"),("X","F"),("Z","J"),
+        ("V","L"),("W","O"),("E","AA"),("F","AB"),("C","K"),("D","AH"),
+        ("G","AC"),("I","BB"),("J","BC"),("K","BD"),("L","BE"),("M","BF"),
+        ("N","BG"),("O","I"),("B","R"),
+        ("IP","FW"),("MJ","CC"),("AJ","CG"),("FL","CY"),("BW","DA"),
+        ("IE","DS"),("PA","GT"),("MM","FS"),("JR","ES"),("JL","EM"),
+        ("OD","GH"),("OG","EQ"),("MO","EE"),("PE","GX"),
+        ("BJ","CK"),("BD","CM"),("BN","CO"),("BL","CQ"),("JF","EI"),
+        ("JG","EK"),("HQ","FA"),("PP","HN"),("BZ","FK"),
+        ("FB","FM"),("FC","FO"),("FA","FQ"),
+        ("KC","EW"),("JS","EU"),("JV","GN"),("JX","GP"),("JW","GR"),
+        ("IG","GL"),("GO","DY"),("AE","HH"),("CS","HJ"),("ER","PI"),
+        ("PH","GZ"),("PI","HB"),("C","K"),("CE","EP")
     ]
+    orig_idx = [letter_to_index(o) for o,_ in movimientos]
+    dest_idx = [letter_to_index(d) for _,d in movimientos]
 
-    origen_indices = [letter_to_index(m[0]) for m in movimientos]
-    destino_indices = [letter_to_index(m[1]) for m in movimientos]
+    max_dest = max(dest_idx)
+    df_nuevo = pd.DataFrame(np.nan, index=df.index, columns=range(max_dest+1))
 
-    # Crear DataFrame destino suficientemente grande
-    max_col_index = max(destino_indices)
-    df_nuevo = pd.DataFrame(np.nan, index=df.index, columns=range(max_col_index + 1))
+    for oi,di in zip(orig_idx,dest_idx):
+        if oi < df.shape[1]:
+            df_nuevo.iloc[:,di] = df.iloc[:,oi].values
 
-    # Mover datos
-    for orig_idx, dest_idx in zip(origen_indices, destino_indices):
-        if orig_idx < df.shape[1]:
-            df_nuevo.iloc[:, dest_idx] = df.iloc[:, orig_idx].values
-
-    # --- Lista completa de columnas MobilServ ---
+    # 2️⃣ Lista completa de encabezados
     full_headers = [
         "Sample Status","Report Status","Date Reported","Asset ID","Unit ID","Unit Description","Asset Class",
         "Position","Tested Lubricant","Service Level","Sample Bottle ID","Manufacturer","Alt Manufacturer",
@@ -101,51 +96,59 @@ def process_excel_file(df):
         "Water (Vol %)","RESULT_Water (Vol%)","Water (Vol%)","RESULT_Water (Vol%) 2","Water (Vol.)","RESULT_Water (Vol%) 3","Water Free est.","RESULT_Water Free est.","Zn (Zinc)"
     ]
 
-    # 2️⃣ Reindexar para asegurar todas las columnas MobilServ
+    # 2️⃣ Reindexar y renombrar
     df_final = df_nuevo.reindex(columns=range(len(full_headers)))
     df_final.columns = full_headers
 
     # 3️⃣ Formatear fechas
-    for col in ["Date Reported", "Date Sampled", "Date Registered", "Date Received"]:
+    for col in ["Date Reported","Date Sampled","Date Registered","Date Received"]:
         if col in df_final.columns:
             df_final[col] = pd.to_datetime(df_final[col], errors='coerce')
 
     # 4️⃣ Sample Status automático
     if "Report Status" in df_final.columns and "Sample Status" in df_final.columns:
-        mask = df_final["Report Status"].notna() & (df_final["Report Status"] != "")
-        df_final.loc[mask, "Sample Status"] = "Completed"
+        mask = df_final["Report Status"].notna() & (df_final["Report Status"]!="")
+        df_final.loc[mask,"Sample Status"] = "Completed"
 
     return df_final
 
 def to_excel(df):
-    """Exporta a Excel con formato básico."""
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl', datetime_format='yyyy-mm-dd') as writer:
         df.to_excel(writer, index=False, sheet_name='MobilServ_Data')
     return output.getvalue()
 
-# --- Interfaz ---
-uploaded_files = st.file_uploader("📤 Sube uno o varios archivos Excel", type=["xlsx","xls"], accept_multiple_files=True)
+# --- UI ---
 
-if uploaded_files:
+uploaded = st.file_uploader("📤 Sube archivos Excel", type=["xlsx"], accept_multiple_files=True)
+if uploaded:
     dfs = []
-    for f in uploaded_files:
-        df = pd.read_excel(f, header=0, dtype=str)
-        df["Archivo_Origen"] = f.name
-        dfs.append(df)
+    for f in uploaded:
+        tmp = pd.read_excel(f, header=0, dtype=str)
+        tmp["Archivo_Origen"] = f.name
+        dfs.append(tmp)
+    df_comb = pd.concat(dfs, ignore_index=True)
 
-    df_combined = pd.concat(dfs, ignore_index=True)
-    st.subheader("📊 Vista previa de datos combinados")
-    st.dataframe(df_combined.head(10))
+    st.subheader("📊 Datos combinados originales")
+    st.dataframe(df_comb.head(10))
 
-    df_final = process_excel_file(df_combined)
-    st.subheader("✅ Vista previa MobilServ")
-    st.dataframe(df_final.head(10))
+    df_final = process_excel_file(df_comb)
 
-    excel_data = to_excel(df_final)
-    st.download_button(
-        label="📥 Descargar Excel MobilServ",
-        data=excel_data,
-        file_name="mobilserv_ordenado.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    # 🌟 Renombrar duplicados solo para vista previa
+    seen={}
+    preview_cols=[]
+    for c in df_final.columns:
+        if c not in seen:
+            seen[c]=0; preview_cols.append(c)
+        else:
+            seen[c]+=1; preview_cols.append(f"{c} ({seen[c]})")
+    preview_df = pd.DataFrame(df_final.head(10).values, columns=preview_cols)
+
+    st.subheader("✅ Preview MobilServ (sin error de duplicados)")
+    st.dataframe(preview_df)
+
+    data = to_excel(df_final)
+    st.download_button("📥 Descargar MobilServ", data=data,
+                       file_name="mobilserv.xlsx",
+                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
