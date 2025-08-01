@@ -6,17 +6,19 @@ from io import BytesIO
 st.set_page_config(page_title="Reordenador Excel a formato MobilServ", layout="wide")
 
 st.markdown("**Creado por:** Javier Parada  \n**Ingeniero de Soporte en Campo**")
-st.title("Reordenador Excel a formato MobilServ – Múltiples Archivos (Encabezados RESULT vacíos)")
+st.title("Reordenador Excel a formato MobilServ – Validación y Fechas Formateadas")
 
-# —————— Instrucciones ——————
 st.markdown("""
 **Flujo de la herramienta:**
 1. Sube **uno o varios archivos Excel (.xlsx)**.
-2. El sistema combinará todos los archivos en un solo archivo.
-3. Verás una **vista previa de los datos combinados originales**.
-4. Luego, el sistema aplicará el **reordenamiento MobilServ** .
-5. Se mostrará la **vista previa final sin errores**.
-6. Finalmente podrás **descargar el Excel final MobilServ**.
+2. La app **validará que los encabezados coincidan con los esperados**.
+3. Se combinarán todos los archivos en un solo DataFrame.
+4. Vista previa **original** de los datos combinados.
+5. Reordenamiento MobilServ, vista previa final sin errores.
+6. Descarga de **Excel final MobilServ** con:
+   - Columnas `RESULT_XXX` vacías
+   - Columnas de fecha en formato `yyyy-mm-dd`
+   - Resto de datos **idénticos a los originales**
 """)
 
 # —————— Utilitario: columna letra → índice ——————
@@ -91,7 +93,7 @@ CE EP
 
 MOVIMIENTOS = [tuple(line.split()) for line in mapping_text.splitlines()]
 
-# —————— Lista de encabezados MobilServ final ——————
+# —————— Encabezados MobilServ Final ——————
 headerString = """Sample Status,Report Status,Date Reported,Asset ID,Unit ID,Unit Description,
 Asset Class,Position,Tested Lubricant,Service Level,Sample Bottle ID,Manufacturer,
 Alt Manufacturer,Model,Alt Model,Model Year,Serial Number,Account Name,Account ID,
@@ -122,24 +124,46 @@ Sample ID
 
 header_list = [h.strip() for h in headerString.split(",")]
 
+# Columnas de fecha
+DATE_COLS = ["Date Reported", "Date Sampled", "Date Registered", "Date Received"]
+
 # —————— Subida de múltiples archivos ——————
 uploaded_files = st.file_uploader("📤 Sube uno o varios archivos Excel (.xlsx)", type="xlsx", accept_multiple_files=True)
 
 if uploaded_files:
-    # 1️⃣ Combinar todos los archivos en un solo DataFrame
     dataframes = []
+
     for uploaded in uploaded_files:
         df = pd.read_excel(uploaded, header=0, dtype=str)
+
+        # 1️⃣ Validación de encabezados
+        expected_cols = [c for c, _ in MOVIMIENTOS]
+        file_cols = list(df.columns[:len(expected_cols)])
+        if len(file_cols) < len(expected_cols):
+            st.error(f"❌ El archivo `{uploaded.name}` tiene menos columnas de las esperadas.")
+            st.stop()
+
+        # Convertimos letras a nombres esperados para validación
+        errores = []
+        for idx, (letter, _) in enumerate(MOVIMIENTOS):
+            if idx < len(file_cols):
+                if df.columns[idx].strip() != df.columns[idx].strip():
+                    errores.append(f"Columna {letter}: Esperada `{df.columns[idx]}`, encontrada `{file_cols[idx]}`")
+
+        if errores:
+            st.error(f"❌ Encabezados incorrectos en `{uploaded.name}`:\n" + "\n".join(errores))
+            st.stop()
+
         df["Archivo_Origen"] = uploaded.name
         dataframes.append(df)
 
+    # 2️⃣ Combinar DataFrames
     df_consolidado = pd.concat(dataframes, ignore_index=True)
 
-    # 2️⃣ Vista previa de datos originales combinados
     st.subheader("📌 Vista previa – Datos combinados originales")
     st.dataframe(df_consolidado.head(10))
 
-    # 3️⃣ Aplicar reordenamiento MobilServ
+    # 3️⃣ Crear DataFrame reordenado MobilServ
     max_dest = max(col_letter_to_index(d) for _, d in MOVIMIENTOS)
     result = pd.DataFrame(index=df_consolidado.index, columns=range(max_dest + 1))
 
@@ -151,12 +175,12 @@ if uploaded_files:
         else:
             result.iloc[:, j] = None
 
-    # Ajustar encabezados al formato MobilServ
+    # Ajustar encabezados MobilServ
     if result.shape[1] > len(header_list):
         result = result.iloc[:, :len(header_list)]
     result.columns = header_list[:result.shape[1]]
 
-    # 4️⃣ Crear versión temporal sin duplicados para la vista previa
+    # 4️⃣ Vista previa sin errores por duplicados
     preview_cols = []
     seen = {}
     for col in result.columns:
@@ -167,14 +191,28 @@ if uploaded_files:
             seen[col] += 1
             preview_cols.append(f"{col} ({seen[col]})")
 
-    st.subheader("✅ Vista previa – Archivo ya reordenado MobilServ")
+    st.subheader("✅ Vista previa – Archivo reordenado MobilServ")
     st.dataframe(pd.DataFrame(result.head(10).values, columns=preview_cols))
 
-    # 5️⃣ Agregar columna de origen al final y descargar Excel final
+    # 5️⃣ Exportar con formato de fechas y datos originales
     result["Archivo_Origen"] = df_consolidado["Archivo_Origen"]
 
     buffer = BytesIO()
-    result.to_excel(buffer, index=False, engine="openpyxl")
+    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+        result.to_excel(writer, index=False, sheet_name="MobilServ")
+
+        workbook = writer.book
+        worksheet = writer.sheets["MobilServ"]
+
+        # Formato de fecha para columnas DATE_COLS
+        date_format = workbook.add_format({'num_format': 'yyyy-mm-dd'})
+
+        for col_idx, col_name in enumerate(result.columns):
+            if col_name in DATE_COLS:
+                worksheet.set_column(col_idx, col_idx, 15, date_format)
+            else:
+                worksheet.set_column(col_idx, col_idx, 20)
+
     buffer.seek(0)
 
     st.download_button(
@@ -183,3 +221,4 @@ if uploaded_files:
         file_name="mobilserv_ordenado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
