@@ -138,6 +138,7 @@ if uploaded_files:
         max_dest = max(col_letter_to_index(d) for _, d in MOVIMIENTOS)
         result = pd.DataFrame(index=df.index, columns=range(max_dest + 1))
 
+        # Aplicar el mapeo
         for orig, dest in MOVIMIENTOS:
             i = col_letter_to_index(orig)
             j = col_letter_to_index(dest)
@@ -146,11 +147,12 @@ if uploaded_files:
             else:
                 result.iloc[:, j] = None
 
+        # Ajustar encabezados
         if result.shape[1] > len(header_list):
             result = result.iloc[:, :len(header_list)]
         result.columns = header_list[:result.shape[1]]
 
-        # Evita duplicados en encabezados
+        # Evitar duplicados en encabezados
         seen = {}
         unique_cols = []
         for col in result.columns:
@@ -162,23 +164,31 @@ if uploaded_files:
                 unique_cols.append(f"{col} ({seen[col]})")
         result.columns = unique_cols
 
-        # Tipos: fechas, enteros, decimales
+        # Conversión segura de tipos
         for c in DATE_COLS:
             if c in result:
                 result[c] = pd.to_datetime(result[c], errors="coerce").dt.date
+
         for letter in INT_LETTERS:
             idx = col_letter_to_index(letter)
             if idx < result.shape[1]:
-                result.iloc[:, idx] = pd.to_numeric(result.iloc[:, idx], errors="coerce").astype("Int64")
+                col_data = pd.to_numeric(result.iloc[:, idx], errors="coerce")
+                # Evita error de conversión en pandas 2.x
+                if col_data.isna().any():
+                    result.iloc[:, idx] = col_data.astype("Int64")
+                else:
+                    result.iloc[:, idx] = col_data.astype(int)
+
         for letter in DEC_LETTERS:
             idx = col_letter_to_index(letter)
             if idx < result.shape[1]:
                 result.iloc[:, idx] = pd.to_numeric(result.iloc[:, idx], errors="coerce").round(2)
 
+        # Ajustar Sample Status
         if "Report Status" in result and "Sample Status" in result:
             result.loc[result["Report Status"].notna(), "Sample Status"] = "Completed"
 
-        # Agregar columna de origen al DataFrame final
+        # Agregar columna de origen
         result["Archivo_Origen"] = uploaded.name
         df_consolidado = pd.concat([df_consolidado, result], ignore_index=True)
 
