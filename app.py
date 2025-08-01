@@ -13,15 +13,14 @@ st.set_page_config(
 st.title("🔄 Conversor de Formato a MobilServ")
 
 st.markdown("""
-**Flujo:**
-1. Sube uno o varios archivos Excel.
+**Flujo de la aplicación:**
+1. Sube **uno o varios archivos Excel**.
 2. Visualiza los datos originales combinados.
-3. Transforma el archivo al formato MobilServ.
-4. Descarga el resultado en Excel.
+3. Transforma los datos al formato **MobilServ completo**.
+4. Descarga el resultado final en Excel.
 """)
 
 # --- Funciones auxiliares ---
-
 def letter_to_index(letter):
     """Convierte letra de columna a índice base 0."""
     letter = letter.upper()
@@ -32,7 +31,7 @@ def letter_to_index(letter):
 
 def process_excel_file(df):
     """Transforma el DataFrame combinado al formato MobilServ."""
-    
+
     # 1️⃣ Mapeo de columnas origen → destino
     movimientos = [
         ("A", "W"), ("Y", "B"), ("H", "C"), ("U", "E"), ("X", "F"), ("Z", "J"),
@@ -62,45 +61,56 @@ def process_excel_file(df):
         if orig_idx < df.shape[1]:
             df_nuevo.iloc[:, dest_idx] = df.iloc[:, orig_idx].values
 
-    # Encabezados MobilServ
-    header_string = """Sample Status,Report Status,Date Reported,Asset ID,Unit ID,Unit Description,
-Asset Class,Position,Tested Lubricant,Service Level,Sample Bottle ID,Manufacturer,
-Alt Manufacturer,Model,Alt Model,Model Year,Serial Number,Account Name,Account ID,
-Oil Rating,Contamination Rating,Equipment Rating,Parent Account Name,Parent Account ID,
-ERP Account Number,Days Since Sampled,Date Sampled,Date Registered,Date Received,
-Country,Laboratory,Business Lines,Fully Qualified,LIMS Sample ID,Schedule,
-Tested Lubricant ID,Registered Lubricant,Registered Lubricant ID,Zone,Work ID,Sampler,
-IMO No,Service Type,Component Type,Fuel Type,RPM,Cycles,Pressure,kW Rating,Cylinder Number,
-Target PC 4,Target PC 6,Target PC 14,Equipment Age,Equipment UOM,Oil Age,Oil Age UOM,
-Makeup Volume,MakeUp Volume UOM,Oil Changed,Filter Changed,Oil Temp In,Oil Temp Out,
-Oil Temp UOM,Coolant Temp In,Coolant Temp Out,Coolant Temp UOM,Reservoir Temp,
-Reservoir Temp UOM,Total Engine Hours,Hrs. Since Last Overhaul,Oil Service Hours,
-Used Oil Volume,Used Oil Volume UOM,Oil Used in Last 24Hrs,Oil Used in Last 24Hrs UOM,
-Sulphur %,Engine Power at Sampling,Date Landed,Port Landed,Ag (Silver),RESULT_Ag,
-Al (Aluminum),RESULT_Al,B (Boron),RESULT_B,Ba (Barium),RESULT_Ba,Ca (Calcium),
-RESULT_Ca,Cd (Cadmium),RESULT_Cd,Cl (Chlorine ppm - Xray),RESULT_Cl,Cr (Chromium),
-RESULT_Cr,Cu (Copper),RESULT_Cu,K (Potassium),RESULT_K,Mg (Magnesium),RESULT_Mg,
-Mn (Manganese),RESULT_Mn,Mo (Molybdenum),RESULT_Mo,Na (Sodium),RESULT_Na,
-Ni (Nickel),RESULT_Ni,P (Phosphorus),RESULT_P,Zn (Zinc),RESULT_Zn,
-ISO Code (4/6/14),RESULT_ISO Code (4/6/14),Particle Count >4um,RESULT_Particle Count >4um,
-Particle Count >6um,RESULT_Particle Count >6um,Particle Count >14um,RESULT_Particle Count >14um,
-Oxidation (Ab/cm),RESULT_Oxidation,Nitration (Ab/cm),RESULT_Nitration,
-TAN (mg KOH/g),RESULT_TAN,TBN (mg KOH/g),RESULT_TBN,Soot (Wt%),RESULT_Soot,
-Fuel Dilut. (Vol%),RESULT_Fuel Dilut.,Water (IR),RESULT_Water,Water KF,RESULT_Water KF,
-Glycol %,RESULT_Glycol,Visc@100C (cSt),RESULT_Visc@100C,Visc@40C (cSt),RESULT_Visc@40C,
-Sample ID"""
-    headers = [h.strip() for h in header_string.split(",")]
+    # --- Lista completa de columnas MobilServ ---
+    full_headers = [
+        "Sample Status","Report Status","Date Reported","Asset ID","Unit ID","Unit Description","Asset Class",
+        "Position","Tested Lubricant","Service Level","Sample Bottle ID","Manufacturer","Alt Manufacturer",
+        "Model","Alt Model","Model Year","Serial Number","Account Name","Account ID","Oil Rating",
+        "Contamination Rating","Equipment Rating","Parent Account Name","Parent Account ID","ERP Account Number",
+        "Days Since Sampled","Date Sampled","Date Registered","Date Received","Country","Laboratory","Business Lines",
+        "Fully Qualified","LIMS Sample ID","Schedule","Tested Lubricant ID","Registered Lubricant",
+        "Registered Lubricant ID","Zone","Work ID","Sampler","IMO No","Service Type","Component Type",
+        "Fuel Type","RPM","Cycles","Pressure","kW Rating","Cylinder Number","Target PC 4","Target PC 6","Target PC 14",
+        "Equipment Age","Equipment UOM","Oil Age","Oil Age UOM","Makeup Volume","MakeUp Volume UOM","Oil Changed",
+        "Filter Changed","Oil Temp In","Oil Temp Out","Oil Temp UOM","Coolant Temp In","Coolant Temp Out",
+        "Coolant Temp UOM","Reservoir Temp","Reservoir Temp UOM","Total Engine Hours","Hrs. Since Last Overhaul",
+        "Oil Service Hours","Used Oil Volume","Used Oil Volume UOM","Oil Used in Last 24Hrs","Oil Used in Last 24Hrs UOM",
+        "Sulphur %","Engine Power at Sampling","Date Landed","Port Landed","Ag (Silver)","RESULT_Ag",
+        "Air Release @50 (min)","RESULT_Air Release @50 (min)","Al (Aluminum)","RESULT_Al","Appearance","RESULT_Appearance",
+        "B (Boron)","RESULT_ B","Ba (Barium)","RESULT_Ba","Ca (Calcium)","RESULT_Ca","Cd (Cadmium)","RESULT_Cd",
+        "Cl (Chlorine ppm - Xray)","RESULT_Cl (Chlorine ppm - Xray)","Compatibility","RESULT_Compatibility",
+        "Coolant Indicator","RESULT_Coolant Indicator","Cr (Chromium)","RESULT_Cr","Cu (Copper)","RESULT_Cu",
+        "DAC(%Asphalt.)","RESULT_DAC(%Asphalt.)","Demul@54C  (min)","RESULT_Demul@54C  (min)","Demul@54C (min)","RESULT_Demul@54C (min)",
+        "Demul@54C (Oil/Water/Emul/Time)","RESULT_Demul@54C (Oil/Water/Emul/Time)","Demulsibility @54C (time-min)","RESULT_Demulsibility @54C (time-min)",
+        "Demulsibility @54C (oil)","RESULT_Demulsibility @54C (oil)","Demulsibility @54C (water)","RESULT_Demulsibility @54C (water)",
+        "Demulsibility @54C (emulsion)","RESULT_Demulsibility @54C (emulsion)","Fe (Iron)","RESULT_Fe (Iron)",
+        "Foam Seq 1 - stability (ml)","RESULT_Foam Seq 1 - stability (ml)","Foam Seq 1 - tendency (ml)","RESULT_Foam Seq 1 - tendency (ml)",
+        "Fuel Dilut. (Vol%)","RESULT_Fuel Dilut. (Vol%)","Initial pH","RESULT_Initial pH","Insolubles 5u","RESULT_Insolubles 5u",
+        "K (Potassium)","RESULT_K","MCR","RESULT_MCR","Mg (Magnesium)","RESULT_Mg","Mn (Manganese)","RESULT_Mn (Manganese)",
+        "Mo (Molybdenum)","RESULT_Mo","MPC delta E","RESULT_MPC delta E","Na (Sodium)","RESULT_Na","Ni (Nickel)","RESULT_Ni",
+        "Nitration (Ab/cm)","RESULT_Nitration (Ab/cm)","Oxidation (Ab/cm)","RESULT_Oxidation (Ab/cm)","P  (Phosphorus)","RESULT_P  (Phosphorus)",
+        "P (Phosphorus)","RESULT_P (Phosphorus)","ISO Code (4/6/14)","RESULT_ISO Code (4/6/14)","Particle Count  >4um","RESULT_Particle Count  >4um",
+        "Particle Count  >6um","RESULT_Particle Count  >6um","Particle Count>14um","RESULT_Particle Count>14um","Diluted ISO Code (4/6/14)","RESULT_Diluted ISO Code (4/6/14)",
+        "Particle Count (Diluted) >4um","RESULT_Particle Count (Diluted) >4um","Particle Count (Diluted) >6um","RESULT_Particle Count (Diluted) >6um",
+        "Particle Count (Diluted) >14um","RESULT_Particle Count (Diluted) >14um","Pb (Lead)","RESULT_Pb","PM Flash Pt.(°C)","RESULT_PM Flash Pt.(°C)",
+        "PQ Index","RESULT_PQ Index","RESULT_Product","RPVOT (Min)","RESULT_RPVOT (Min)","RULER-Amine (% vs new)","RESULT_RULER-Amine (% vs new)",
+        "RULER-Phenol (% vs new)","RESULT_RULER-Phenol (% vs new)","SAE Viscosity Grade","RESULT_SAE Viscosity Grade","Si (Silicon)","RESULT_Si",
+        "Sn (Tin)","RESULT_Sn","Soot (Wt%)","RESULT_Soot (Wt%)","TAN (mg KOH/g)","RESULT_TAN (mg KOH/g)","TBN (mg KOH/g)","RESULT_TBN (mg KOH/g) 2",
+        "TBN (mg KOH/g)","RESULT_TBN (mg KOH/g) 2","Ti (Titanium)","RESULT_Ti","UC Rating","RESULT_UC Rating","V (Vanadium)","RESULT_V",
+        "Visc@100C (cSt)","RESULT_Visc@100C (cSt)","Visc@40C (cSt)","RESULT_Visc@40C (cSt)","Water (Hot Plate)","RESULT_Water (Hot Plate)",
+        "Water (Vol %)","RESULT_Water (Vol%)","Water (Vol%)","RESULT_Water (Vol%) 2","Water (Vol.)","RESULT_Water (Vol%) 3","Water Free est.","RESULT_Water Free est.","Zn (Zinc)"
+    ]
 
-    # Ajustar columnas al tamaño de headers
-    df_final = df_nuevo.reindex(columns=range(len(headers)))
-    df_final.columns = headers
+    # 2️⃣ Reindexar para asegurar todas las columnas MobilServ
+    df_final = df_nuevo.reindex(columns=range(len(full_headers)))
+    df_final.columns = full_headers
 
-    # Formatear fechas
+    # 3️⃣ Formatear fechas
     for col in ["Date Reported", "Date Sampled", "Date Registered", "Date Received"]:
         if col in df_final.columns:
             df_final[col] = pd.to_datetime(df_final[col], errors='coerce')
 
-    # Marcar Sample Status
+    # 4️⃣ Sample Status automático
     if "Report Status" in df_final.columns and "Sample Status" in df_final.columns:
         mask = df_final["Report Status"].notna() & (df_final["Report Status"] != "")
         df_final.loc[mask, "Sample Status"] = "Completed"
@@ -115,7 +125,6 @@ def to_excel(df):
     return output.getvalue()
 
 # --- Interfaz ---
-
 uploaded_files = st.file_uploader("📤 Sube uno o varios archivos Excel", type=["xlsx","xls"], accept_multiple_files=True)
 
 if uploaded_files:
