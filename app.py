@@ -109,7 +109,7 @@ header_list = [
     "Reservoir Temp UOM","Total Engine Hours","Hrs. Since Last Overhaul","Oil Service Hours",
     "Used Oil Volume","Used Oil Volume UOM","Oil Used in Last 24Hrs","Oil Used in Last 24Hrs UOM",
     "Sulphur %","Engine Power at Sampling","Date Landed","Port Landed","Ag (Silver)","RESULT_Ag",
-    # ⚠️ Pega aquí toda la lista completa de columnas MobilServ que compartiste
+    # ⚠️ Pega aquí toda la lista completa de columnas MobilServ
 ]
 
 # Columnas de fecha
@@ -148,12 +148,20 @@ if uploaded_files:
         else:
             result.iloc[:, j] = None
 
-    # 3️⃣ Asegurar que tenga todas las columnas MobilServ (vacías si no hay datos)
-    if result.shape[1] < len(header_list):
-        for _ in range(len(header_list) - result.shape[1]):
-            result[result.shape[1]] = None
+    # 3️⃣ Ajustar columnas para que coincidan con header_list
+    current_cols = result.shape[1]
+    expected_cols = len(header_list)
 
-    result.columns = header_list[:result.shape[1]]
+    if current_cols < expected_cols:
+        # Agregar columnas vacías
+        for _ in range(expected_cols - current_cols):
+            result[result.shape[1]] = None
+    elif current_cols > expected_cols:
+        # Recortar columnas sobrantes
+        result = result.iloc[:, :expected_cols]
+
+    # Asignar encabezados completos MobilServ
+    result.columns = header_list
 
     # 4️⃣ Agregar columna Archivo_Origen
     result["Archivo_Origen"] = df_consolidado["Archivo_Origen"]
