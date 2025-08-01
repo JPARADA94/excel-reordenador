@@ -6,15 +6,17 @@ from io import BytesIO
 st.set_page_config(page_title="Reordenador Excel a formato MobilServ", layout="wide")
 
 st.markdown("**Creado por:** Javier Parada  \n**Ingeniero de Soporte en Campo**")
-st.title("Reordenador Excel a formato MobilServ – Múltiples Archivos")
+st.title("Reordenador Excel a formato MobilServ – Múltiples Archivos (Flujo Completo)")
 
 # —————— Instrucciones ——————
 st.markdown("""
-**Cómo usar esta herramienta:**
-1. Sube uno o varios archivos Excel (.xlsx).
-2. El sistema aplicará el reordenamiento a todos los archivos.
-3. Todos los archivos se concatenarán en un **solo DataFrame**.
-4. Descarga el archivo consolidado final en formato MobilServ.
+**Flujo de la herramienta:**
+1. Sube **uno o varios archivos Excel (.xlsx)**.
+2. El sistema combinará todos los archivos en un solo DataFrame.
+3. Verás una **vista previa de los datos combinados originales**.
+4. Luego, el sistema aplicará el **reordenamiento MobilServ**.
+5. Se mostrará la **vista previa del archivo ya ordenado**.
+6. Finalmente podrás **descargar el Excel final ordenado**.
 """)
 
 # —————— Utilitario: columna letra → índice ——————
@@ -24,7 +26,7 @@ def col_letter_to_index(letter: str) -> int:
         idx = idx * 26 + (ord(c) - ord("A") + 1)
     return idx - 1
 
-# —————— Mapeo actualizado (según tabla final) ——————
+# —————— Mapeo actualizado ——————
 mapping_text = """
 A W
 Y B
@@ -89,7 +91,7 @@ CE EP
 
 MOVIMIENTOS = [tuple(line.split()) for line in mapping_text.splitlines()]
 
-# —————— Encabezados destino ——————
+# —————— Encabezados destino MobilServ ——————
 headerString = """Sample Status,Report Status,Date Reported,Asset ID,Unit ID,Unit Description,
 Asset Class,Position,Tested Lubricant,Service Level,Sample Bottle ID,Manufacturer,
 Alt Manufacturer,Model,Alt Model,Model Year,Serial Number,Account Name,Account ID,
@@ -129,81 +131,83 @@ DEC_LETTERS = ["DY","GL","GN","GP","GR","GZ","HB","HH","HJ"]
 uploaded_files = st.file_uploader("📤 Sube uno o varios archivos Excel (.xlsx)", type="xlsx", accept_multiple_files=True)
 
 if uploaded_files:
-    df_consolidado = pd.DataFrame()
-
+    # 1️⃣ Combinar todos los archivos en un solo DataFrame
+    dataframes = []
     for uploaded in uploaded_files:
         df = pd.read_excel(uploaded, header=0, dtype=str)
         df["Archivo_Origen"] = uploaded.name
+        dataframes.append(df)
 
-        max_dest = max(col_letter_to_index(d) for _, d in MOVIMIENTOS)
-        result = pd.DataFrame(index=df.index, columns=range(max_dest + 1))
+    df_consolidado = pd.concat(dataframes, ignore_index=True)
 
-        # Aplicar el mapeo
-        for orig, dest in MOVIMIENTOS:
-            i = col_letter_to_index(orig)
-            j = col_letter_to_index(dest)
-            if i < df.shape[1]:
-                result.iloc[:, j] = df.iloc[:, i]
-            else:
-                result.iloc[:, j] = None
-
-        # Ajustar encabezados
-        if result.shape[1] > len(header_list):
-            result = result.iloc[:, :len(header_list)]
-        result.columns = header_list[:result.shape[1]]
-
-        # Evitar duplicados en encabezados
-        seen = {}
-        unique_cols = []
-        for col in result.columns:
-            if col not in seen:
-                seen[col] = 0
-                unique_cols.append(col)
-            else:
-                seen[col] += 1
-                unique_cols.append(f"{col} ({seen[col]})")
-        result.columns = unique_cols
-
-        # Conversión segura de tipos
-        for c in DATE_COLS:
-            if c in result:
-                result[c] = pd.to_datetime(result[c], errors="coerce").dt.date
-
-        for letter in INT_LETTERS:
-            idx = col_letter_to_index(letter)
-            if idx < result.shape[1]:
-                col_data = pd.to_numeric(result.iloc[:, idx], errors="coerce")
-                # Evita error de conversión en pandas 2.x
-                if col_data.isna().any():
-                    result.iloc[:, idx] = col_data.astype("Int64")
-                else:
-                    result.iloc[:, idx] = col_data.astype(int)
-
-        for letter in DEC_LETTERS:
-            idx = col_letter_to_index(letter)
-            if idx < result.shape[1]:
-                result.iloc[:, idx] = pd.to_numeric(result.iloc[:, idx], errors="coerce").round(2)
-
-        # Ajustar Sample Status
-        if "Report Status" in result and "Sample Status" in result:
-            result.loc[result["Report Status"].notna(), "Sample Status"] = "Completed"
-
-        # Agregar columna de origen
-        result["Archivo_Origen"] = uploaded.name
-        df_consolidado = pd.concat([df_consolidado, result], ignore_index=True)
-
-    # Vista previa después de consolidar
-    st.subheader("✅ Vista previa – Archivo consolidado final")
+    # 2️⃣ Vista previa del DataFrame combinado original
+    st.subheader("📌 Vista previa – Datos combinados originales")
     st.dataframe(df_consolidado.head(10))
 
-    # Descarga del archivo consolidado
+    # 3️⃣ Aplicar reordenamiento MobilServ
+    max_dest = max(col_letter_to_index(d) for _, d in MOVIMIENTOS)
+    result = pd.DataFrame(index=df_consolidado.index, columns=range(max_dest + 1))
+
+    for orig, dest in MOVIMIENTOS:
+        i = col_letter_to_index(orig)
+        j = col_letter_to_index(dest)
+        if i < df_consolidado.shape[1]:
+            result.iloc[:, j] = df_consolidado.iloc[:, i]
+        else:
+            result.iloc[:, j] = None
+
+    # Ajustar encabezados
+    if result.shape[1] > len(header_list):
+        result = result.iloc[:, :len(header_list)]
+    result.columns = header_list[:result.shape[1]]
+
+    # Evitar encabezados duplicados
+    seen = {}
+    unique_cols = []
+    for col in result.columns:
+        if col not in seen:
+            seen[col] = 0
+            unique_cols.append(col)
+        else:
+            seen[col] += 1
+            unique_cols.append(f"{col} ({seen[col]})")
+    result.columns = unique_cols
+
+    # Conversión segura de tipos
+    for c in DATE_COLS:
+        if c in result:
+            result[c] = pd.to_datetime(result[c], errors="coerce").dt.date
+
+    for letter in INT_LETTERS:
+        idx = col_letter_to_index(letter)
+        if idx < result.shape[1]:
+            col_data = pd.to_numeric(result.iloc[:, idx], errors="coerce")
+            if col_data.isna().any():
+                result.iloc[:, idx] = col_data.astype("Int64")
+            else:
+                result.iloc[:, idx] = col_data.astype(int)
+
+    for letter in DEC_LETTERS:
+        idx = col_letter_to_index(letter)
+        if idx < result.shape[1]:
+            result.iloc[:, idx] = pd.to_numeric(result.iloc[:, idx], errors="coerce").round(2)
+
+    if "Report Status" in result and "Sample Status" in result:
+        result.loc[result["Report Status"].notna(), "Sample Status"] = "Completed"
+
+    # 4️⃣ Agregar columna de origen y mostrar vista previa final
+    result["Archivo_Origen"] = df_consolidado["Archivo_Origen"]
+    st.subheader("✅ Vista previa – Archivo ya reordenado MobilServ")
+    st.dataframe(result.head(10))
+
+    # 5️⃣ Descargar archivo final
     buffer = BytesIO()
-    df_consolidado.to_excel(buffer, index=False, engine="openpyxl")
+    result.to_excel(buffer, index=False, engine="openpyxl")
     buffer.seek(0)
 
     st.download_button(
-        label="📥 Descargar Excel consolidado",
+        label="📥 Descargar Excel ordenado",
         data=buffer,
-        file_name="mobilserv_consolidado.xlsx",
+        file_name="mobilserv_ordenado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
