@@ -1,208 +1,142 @@
 import streamlit as st
 import pandas as pd
-from io import BytesIO
+import numpy as np
+import io
 
-# —————— Configuración de la página ——————
-st.set_page_config(page_title="Reordenador Excel MobilServ", layout="wide")
+# --- Configuración de la Página ---
+st.set_page_config(
+    page_title="Conversor a MobilServ",
+    page_icon="🔄",
+    layout="wide"
+)
 
-st.markdown("**Creado por:** Javier Parada  \n**Ingeniero de Soporte en Campo**")
-st.title("Reordenador Excel MobilServ – Producción Final")
+st.title("🔄 Conversor de Formato a MobilServ")
 
 st.markdown("""
-**Flujo de la herramienta:**
-1. Sube **uno o varios archivos Excel (.xlsx)**.
-2. Se valida que los encabezados coincidan con los esperados.
-3. Se combinan todos los archivos en un solo DataFrame.
-4. Vista previa **original** y **ordenada MobilServ** sin errores.
-5. Descarga del **Excel final MobilServ** con:
-   - Todas las columnas (incluso vacías y RESULT_XXX)
-   - Columnas de fecha en formato `yyyy-mm-dd`
-   - Datos trasladados exactamente como en los originales
+**Flujo:**
+1. Sube uno o varios archivos Excel.
+2. Visualiza los datos originales combinados.
+3. Transforma el archivo al formato MobilServ.
+4. Descarga el resultado en Excel.
 """)
 
-# —————— Utilitario: columna letra → índice ——————
-def col_letter_to_index(letter: str) -> int:
-    idx = 0
-    for c in letter.upper():
-        idx = idx * 26 + (ord(c) - ord("A") + 1)
-    return idx - 1
+# --- Funciones auxiliares ---
 
-# —————— Mapeo columnas origen → MobilServ ——————
-mapping_text = """
-A W
-Y B
-H C
-U E
-X F
-Z J
-V L
-W O
-E AA
-F AB
-G AC
-I BB
-J BC
-K BD
-L BE
-M BF
-N BG
-O I
-B R
-IP FW
-MJ CC
-AJ CG
-FL CY
-BW DA
-IE DS
-PA GT
-MM FS
-JR ES
-JL EM
-OD GH
-OG EQ
-MO EE
-PE GX
-BJ CK
-BD CM
-BN CO
-BL CQ
-JF EI
-JG EK
-HQ FA
-PP HN
-BZ FK
-FB FM
-FC FO
-FA FQ
-KC EW
-JS EU
-JV GN
-JX GP
-JW GR
-IG GL
-GO DY
-AE HH
-CS HJ
-ER PI
-PH GZ
-PI HB
-C K
-CE EP
-""".strip()
+def letter_to_index(letter):
+    """Convierte letra de columna a índice base 0."""
+    letter = letter.upper()
+    result = 0
+    for char in letter:
+        result = result * 26 + (ord(char) - ord('A')) + 1
+    return result - 1
 
-MOVIMIENTOS = [tuple(line.split()) for line in mapping_text.splitlines()]
+def process_excel_file(df):
+    """Transforma el DataFrame combinado al formato MobilServ."""
+    
+    # 1️⃣ Mapeo de columnas origen → destino
+    movimientos = [
+        ("A", "W"), ("Y", "B"), ("H", "C"), ("U", "E"), ("X", "F"), ("Z", "J"),
+        ("V", "L"), ("W", "O"), ("E", "AA"), ("F", "AB"), ("C", "K"), ("D", "AH"),
+        ("G", "AC"), ("I", "BB"), ("J", "BC"), ("K", "BD"), ("L", "BE"), ("M", "BF"),
+        ("N", "BG"), ("O", "I"), ("B", "R"),
+        ("IP", "FW"), ("MJ", "CC"), ("AJ", "CG"), ("FL", "CY"), ("BW", "DA"),
+        ("IE", "DS"), ("PA", "GT"), ("MM", "FS"), ("JR", "ES"), ("JL", "EM"),
+        ("OD", "GH"), ("OG", "EQ"), ("MO", "EE"), ("PE", "GX"),
+        ("BJ", "CK"), ("BD", "CM"), ("BN", "CO"), ("BL", "CQ"), ("JF", "EI"),
+        ("JG", "EK"), ("HQ", "FA"), ("PP", "HN"), ("BZ", "FK"),
+        ("FB", "FM"), ("FC", "FO"), ("FA", "FQ"),
+        ("KC", "EW"), ("JS", "EU"), ("JV", "GN"), ("JX", "GP"), ("JW", "GR"),
+        ("IG", "GL"), ("GO", "DY"), ("AE", "HH"), ("CS", "HJ"), ("ER", "PI"),
+        ("PH", "GZ"), ("PI", "HB"), ("C", "K"), ("CE", "EP")
+    ]
 
-# —————— Lista completa de encabezados MobilServ ——————
-# ⚠️ Sustituye esta lista con todos los encabezados MobilServ completos que enviaste
-header_list = [
-    "Sample Status","Report Status","Date Reported","Asset ID","Unit ID","Unit Description",
-    "Asset Class","Position","Tested Lubricant","Service Level","Sample Bottle ID","Manufacturer",
-    "Alt Manufacturer","Model","Alt Model","Model Year","Serial Number","Account Name","Account ID",
-    "Oil Rating","Contamination Rating","Equipment Rating","Parent Account Name","Parent Account ID",
-    "ERP Account Number","Days Since Sampled","Date Sampled","Date Registered","Date Received",
-    "Country","Laboratory","Business Lines","Fully Qualified","LIMS Sample ID","Schedule",
-    "Tested Lubricant ID","Registered Lubricant","Registered Lubricant ID","Zone","Work ID","Sampler",
-    "IMO No","Service Type","Component Type","Fuel Type","RPM","Cycles","Pressure","kW Rating","Cylinder Number",
-    "Target PC 4","Target PC 6","Target PC 14","Equipment Age","Equipment UOM","Oil Age","Oil Age UOM",
-    "Makeup Volume","MakeUp Volume UOM","Oil Changed","Filter Changed","Oil Temp In","Oil Temp Out",
-    "Oil Temp UOM","Coolant Temp In","Coolant Temp Out","Coolant Temp UOM","Reservoir Temp",
-    "Reservoir Temp UOM","Total Engine Hours","Hrs. Since Last Overhaul","Oil Service Hours",
-    "Used Oil Volume","Used Oil Volume UOM","Oil Used in Last 24Hrs","Oil Used in Last 24Hrs UOM",
-    "Sulphur %","Engine Power at Sampling","Date Landed","Port Landed","Ag (Silver)","RESULT_Ag",
-    # ⚠️ Pega aquí toda la lista completa de columnas MobilServ
-]
+    origen_indices = [letter_to_index(m[0]) for m in movimientos]
+    destino_indices = [letter_to_index(m[1]) for m in movimientos]
 
-# Columnas de fecha
-DATE_COLS = ["Date Reported", "Date Sampled", "Date Registered", "Date Received"]
+    # Crear DataFrame destino suficientemente grande
+    max_col_index = max(destino_indices)
+    df_nuevo = pd.DataFrame(np.nan, index=df.index, columns=range(max_col_index + 1))
 
-# —————— Subida de múltiples archivos ——————
-uploaded_files = st.file_uploader("📤 Sube uno o varios archivos Excel (.xlsx)", type="xlsx", accept_multiple_files=True)
+    # Mover datos
+    for orig_idx, dest_idx in zip(origen_indices, destino_indices):
+        if orig_idx < df.shape[1]:
+            df_nuevo.iloc[:, dest_idx] = df.iloc[:, orig_idx].values
+
+    # Encabezados MobilServ
+    header_string = """Sample Status,Report Status,Date Reported,Asset ID,Unit ID,Unit Description,
+Asset Class,Position,Tested Lubricant,Service Level,Sample Bottle ID,Manufacturer,
+Alt Manufacturer,Model,Alt Model,Model Year,Serial Number,Account Name,Account ID,
+Oil Rating,Contamination Rating,Equipment Rating,Parent Account Name,Parent Account ID,
+ERP Account Number,Days Since Sampled,Date Sampled,Date Registered,Date Received,
+Country,Laboratory,Business Lines,Fully Qualified,LIMS Sample ID,Schedule,
+Tested Lubricant ID,Registered Lubricant,Registered Lubricant ID,Zone,Work ID,Sampler,
+IMO No,Service Type,Component Type,Fuel Type,RPM,Cycles,Pressure,kW Rating,Cylinder Number,
+Target PC 4,Target PC 6,Target PC 14,Equipment Age,Equipment UOM,Oil Age,Oil Age UOM,
+Makeup Volume,MakeUp Volume UOM,Oil Changed,Filter Changed,Oil Temp In,Oil Temp Out,
+Oil Temp UOM,Coolant Temp In,Coolant Temp Out,Coolant Temp UOM,Reservoir Temp,
+Reservoir Temp UOM,Total Engine Hours,Hrs. Since Last Overhaul,Oil Service Hours,
+Used Oil Volume,Used Oil Volume UOM,Oil Used in Last 24Hrs,Oil Used in Last 24Hrs UOM,
+Sulphur %,Engine Power at Sampling,Date Landed,Port Landed,Ag (Silver),RESULT_Ag,
+Al (Aluminum),RESULT_Al,B (Boron),RESULT_B,Ba (Barium),RESULT_Ba,Ca (Calcium),
+RESULT_Ca,Cd (Cadmium),RESULT_Cd,Cl (Chlorine ppm - Xray),RESULT_Cl,Cr (Chromium),
+RESULT_Cr,Cu (Copper),RESULT_Cu,K (Potassium),RESULT_K,Mg (Magnesium),RESULT_Mg,
+Mn (Manganese),RESULT_Mn,Mo (Molybdenum),RESULT_Mo,Na (Sodium),RESULT_Na,
+Ni (Nickel),RESULT_Ni,P (Phosphorus),RESULT_P,Zn (Zinc),RESULT_Zn,
+ISO Code (4/6/14),RESULT_ISO Code (4/6/14),Particle Count >4um,RESULT_Particle Count >4um,
+Particle Count >6um,RESULT_Particle Count >6um,Particle Count >14um,RESULT_Particle Count >14um,
+Oxidation (Ab/cm),RESULT_Oxidation,Nitration (Ab/cm),RESULT_Nitration,
+TAN (mg KOH/g),RESULT_TAN,TBN (mg KOH/g),RESULT_TBN,Soot (Wt%),RESULT_Soot,
+Fuel Dilut. (Vol%),RESULT_Fuel Dilut.,Water (IR),RESULT_Water,Water KF,RESULT_Water KF,
+Glycol %,RESULT_Glycol,Visc@100C (cSt),RESULT_Visc@100C,Visc@40C (cSt),RESULT_Visc@40C,
+Sample ID"""
+    headers = [h.strip() for h in header_string.split(",")]
+
+    # Ajustar columnas al tamaño de headers
+    df_final = df_nuevo.reindex(columns=range(len(headers)))
+    df_final.columns = headers
+
+    # Formatear fechas
+    for col in ["Date Reported", "Date Sampled", "Date Registered", "Date Received"]:
+        if col in df_final.columns:
+            df_final[col] = pd.to_datetime(df_final[col], errors='coerce')
+
+    # Marcar Sample Status
+    if "Report Status" in df_final.columns and "Sample Status" in df_final.columns:
+        mask = df_final["Report Status"].notna() & (df_final["Report Status"] != "")
+        df_final.loc[mask, "Sample Status"] = "Completed"
+
+    return df_final
+
+def to_excel(df):
+    """Exporta a Excel con formato básico."""
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl', datetime_format='yyyy-mm-dd') as writer:
+        df.to_excel(writer, index=False, sheet_name='MobilServ_Data')
+    return output.getvalue()
+
+# --- Interfaz ---
+
+uploaded_files = st.file_uploader("📤 Sube uno o varios archivos Excel", type=["xlsx","xls"], accept_multiple_files=True)
 
 if uploaded_files:
-    dataframes = []
-    for uploaded in uploaded_files:
-        df = pd.read_excel(uploaded, header=0, dtype=str)
+    dfs = []
+    for f in uploaded_files:
+        df = pd.read_excel(f, header=0, dtype=str)
+        df["Archivo_Origen"] = f.name
+        dfs.append(df)
 
-        # Validación básica
-        if df.shape[1] < len(MOVIMIENTOS):
-            st.error(f"❌ El archivo `{uploaded.name}` tiene menos columnas de las esperadas.")
-            st.stop()
+    df_combined = pd.concat(dfs, ignore_index=True)
+    st.subheader("📊 Vista previa de datos combinados")
+    st.dataframe(df_combined.head(10))
 
-        df["Archivo_Origen"] = uploaded.name
-        dataframes.append(df)
+    df_final = process_excel_file(df_combined)
+    st.subheader("✅ Vista previa MobilServ")
+    st.dataframe(df_final.head(10))
 
-    # 1️⃣ Combinar DataFrames
-    df_consolidado = pd.concat(dataframes, ignore_index=True)
-    st.subheader("📌 Vista previa – Datos combinados originales")
-    st.dataframe(df_consolidado.head(10))
-
-    # 2️⃣ Crear DataFrame por posiciones numéricas para usar iloc
-    max_dest = max(col_letter_to_index(d) for _, d in MOVIMIENTOS)
-    result = pd.DataFrame(index=df_consolidado.index, columns=range(max_dest + 1))
-
-    for orig, dest in MOVIMIENTOS:
-        i = col_letter_to_index(orig)
-        j = col_letter_to_index(dest)
-        if i < df_consolidado.shape[1]:
-            result.iloc[:, j] = df_consolidado.iloc[:, i]
-        else:
-            result.iloc[:, j] = None
-
-    # 3️⃣ Ajustar columnas para que coincidan con header_list
-    current_cols = result.shape[1]
-    expected_cols = len(header_list)
-
-    if current_cols < expected_cols:
-        # Agregar columnas vacías
-        for _ in range(expected_cols - current_cols):
-            result[result.shape[1]] = None
-    elif current_cols > expected_cols:
-        # Recortar columnas sobrantes
-        result = result.iloc[:, :expected_cols]
-
-    # Asignar encabezados completos MobilServ
-    result.columns = header_list
-
-    # 4️⃣ Agregar columna Archivo_Origen
-    result["Archivo_Origen"] = df_consolidado["Archivo_Origen"]
-
-    # 5️⃣ Vista previa sin error de duplicados
-    preview_cols = []
-    seen = {}
-    for col in result.columns:
-        if col not in seen:
-            seen[col] = 0
-            preview_cols.append(col)
-        else:
-            seen[col] += 1
-            preview_cols.append(f"{col} ({seen[col]})")
-
-    st.subheader("✅ Vista previa – Archivo reordenado MobilServ")
-    st.dataframe(pd.DataFrame(result.head(10).values, columns=preview_cols))
-
-    # 6️⃣ Exportar Excel final
-    buffer = BytesIO()
-    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
-        # Convertir columnas de fecha a datetime para exportar como fecha real
-        for col in DATE_COLS:
-            if col in result.columns:
-                result[col] = pd.to_datetime(result[col], errors="coerce")
-
-        result.to_excel(writer, index=False, sheet_name="MobilServ")
-        workbook = writer.book
-        worksheet = writer.sheets["MobilServ"]
-
-        date_format = workbook.add_format({'num_format': 'yyyy-mm-dd'})
-        for col_idx, col_name in enumerate(result.columns):
-            if col_name in DATE_COLS:
-                worksheet.set_column(col_idx, col_idx, 15, date_format)
-            else:
-                worksheet.set_column(col_idx, col_idx, 20)
-
-    buffer.seek(0)
+    excel_data = to_excel(df_final)
     st.download_button(
-        label="📥 Descargar Excel MobilServ final",
-        data=buffer,
+        label="📥 Descargar Excel MobilServ",
+        data=excel_data,
         file_name="mobilserv_ordenado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
