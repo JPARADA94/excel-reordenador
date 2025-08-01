@@ -12,9 +12,9 @@ st.title("Reordenador Excel a formato MobilServ – Múltiples Archivos")
 st.markdown("""
 **Cómo usar esta herramienta:**
 1. Sube uno o varios archivos Excel (.xlsx).
-2. Revisa la vista previa de los datos originales.
-3. El sistema aplicará el reordenamiento a todos los archivos.
-4. Descarga el archivo consolidado final.
+2. El sistema aplicará el reordenamiento a todos los archivos.
+3. Todos los archivos se concatenarán en un **solo DataFrame**.
+4. Descarga el archivo consolidado final en formato MobilServ.
 """)
 
 # —————— Utilitario: columna letra → índice ——————
@@ -135,9 +135,6 @@ if uploaded_files:
         df = pd.read_excel(uploaded, header=0, dtype=str)
         df["Archivo_Origen"] = uploaded.name
 
-        st.subheader(f"📌 Vista previa – {uploaded.name}")
-        st.dataframe(df.head(5))
-
         max_dest = max(col_letter_to_index(d) for _, d in MOVIMIENTOS)
         result = pd.DataFrame(index=df.index, columns=range(max_dest + 1))
 
@@ -185,7 +182,7 @@ if uploaded_files:
         result["Archivo_Origen"] = uploaded.name
         df_consolidado = pd.concat([df_consolidado, result], ignore_index=True)
 
-    # Vista previa consolidada
+    # Vista previa después de consolidar
     st.subheader("✅ Vista previa – Archivo consolidado final")
     st.dataframe(df_consolidado.head(10))
 
