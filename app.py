@@ -6,7 +6,7 @@ from io import BytesIO
 st.set_page_config(page_title="Reordenador Excel a formato MobilServ", layout="wide")
 
 st.markdown("**Creado por:** Javier Parada  \n**Ingeniero de Soporte en Campo**")
-st.title("Reordenador Excel a formato MobilServ – Múltiples Archivos (Flujo Completo)")
+st.title("Reordenador Excel a formato MobilServ – Múltiples Archivos (Solo Traslado de Datos)")
 
 # —————— Instrucciones ——————
 st.markdown("""
@@ -122,13 +122,12 @@ Sample ID
 
 header_list = [h.strip() for h in headerString.split(",")]
 
-# —————— Columnas especiales ——————
-DATE_COLS   = ["Date Reported","Date Sampled","Date Registered","Date Received"]
-INT_LETTERS = ["BB","BD","BF","CC","CG","CK","CM","CO","CQ","CY","DA","DS","EE","EI","EK","EM","EQ","ES","EW","FA","FM","FO","FQ","FS","FW","GH","GT","GX","HN"]
-DEC_LETTERS = ["DY","GL","GN","GP","GR","GZ","HB","HH","HJ"]
-
 # —————— Subida de múltiples archivos ——————
-uploaded_files = st.file_uploader("📤 Sube uno o varios archivos Excel (.xlsx)", type="xlsx", accept_multiple_files=True)
+uploaded_files = st.file_uploader(
+    "📤 Sube uno o varios archivos Excel (.xlsx)",
+    type="xlsx",
+    accept_multiple_files=True
+)
 
 if uploaded_files:
     # 1️⃣ Combinar todos los archivos en un solo DataFrame
@@ -161,42 +160,10 @@ if uploaded_files:
         result = result.iloc[:, :len(header_list)]
     result.columns = header_list[:result.shape[1]]
 
-    # Evitar encabezados duplicados
-    seen = {}
-    unique_cols = []
-    for col in result.columns:
-        if col not in seen:
-            seen[col] = 0
-            unique_cols.append(col)
-        else:
-            seen[col] += 1
-            unique_cols.append(f"{col} ({seen[col]})")
-    result.columns = unique_cols
-
-    # Conversión segura de tipos
-    for c in DATE_COLS:
-        if c in result:
-            result[c] = pd.to_datetime(result[c], errors="coerce").dt.date
-
-    for letter in INT_LETTERS:
-        idx = col_letter_to_index(letter)
-        if idx < result.shape[1]:
-            col_data = pd.to_numeric(result.iloc[:, idx], errors="coerce")
-            if col_data.isna().any():
-                result.iloc[:, idx] = col_data.astype("Int64")
-            else:
-                result.iloc[:, idx] = col_data.astype(int)
-
-    for letter in DEC_LETTERS:
-        idx = col_letter_to_index(letter)
-        if idx < result.shape[1]:
-            result.iloc[:, idx] = pd.to_numeric(result.iloc[:, idx], errors="coerce").round(2)
-
-    if "Report Status" in result and "Sample Status" in result:
-        result.loc[result["Report Status"].notna(), "Sample Status"] = "Completed"
-
-    # 4️⃣ Agregar columna de origen y mostrar vista previa final
+    # Agregar columna de origen
     result["Archivo_Origen"] = df_consolidado["Archivo_Origen"]
+
+    # 4️⃣ Vista previa final ordenada
     st.subheader("✅ Vista previa – Archivo ya reordenado MobilServ")
     st.dataframe(result.head(10))
 
@@ -211,3 +178,4 @@ if uploaded_files:
         file_name="mobilserv_ordenado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
