@@ -6,15 +6,15 @@ from io import BytesIO
 st.set_page_config(page_title="Reordenador Excel a formato MobilServ", layout="wide")
 
 st.markdown("**Creado por:** Javier Parada  \n**Ingeniero de Soporte en Campo**")
-st.title("Reordenador Excel a formato MobilServ")
+st.title("Reordenador Excel a formato MobilServ – Múltiples Archivos")
 
 # —————— Instrucciones ——————
 st.markdown("""
 **Cómo usar esta herramienta:**
-1. Sube tu archivo Excel (.xlsx).
+1. Sube uno o varios archivos Excel (.xlsx).
 2. Revisa la vista previa de los datos originales.
-3. El sistema aplicará el reordenamiento.
-4. Descarga el archivo reordenado con el botón al final.
+3. El sistema aplicará el reordenamiento a todos los archivos.
+4. Descarga el archivo consolidado final.
 """)
 
 # —————— Utilitario: columna letra → índice ——————
@@ -125,68 +125,78 @@ DATE_COLS   = ["Date Reported","Date Sampled","Date Registered","Date Received"]
 INT_LETTERS = ["BB","BD","BF","CC","CG","CK","CM","CO","CQ","CY","DA","DS","EE","EI","EK","EM","EQ","ES","EW","FA","FM","FO","FQ","FS","FW","GH","GT","GX","HN"]
 DEC_LETTERS = ["DY","GL","GN","GP","GR","GZ","HB","HH","HJ"]
 
-# —————— UI y procesamiento ——————
-uploaded = st.file_uploader("📤 Sube tu archivo Excel (.xlsx)", type="xlsx")
+# —————— Subida de múltiples archivos ——————
+uploaded_files = st.file_uploader("📤 Sube uno o varios archivos Excel (.xlsx)", type="xlsx", accept_multiple_files=True)
 
-if uploaded:
-    df = pd.read_excel(uploaded, header=0, dtype=str)
-    st.subheader("📌 Vista previa – Datos originales")
-    st.dataframe(df.head(10))
+if uploaded_files:
+    df_consolidado = pd.DataFrame()
 
-    max_dest = max(col_letter_to_index(d) for _, d in MOVIMIENTOS)
-    result = pd.DataFrame(index=df.index, columns=range(max_dest + 1))
+    for uploaded in uploaded_files:
+        df = pd.read_excel(uploaded, header=0, dtype=str)
+        df["Archivo_Origen"] = uploaded.name
 
-    for orig, dest in MOVIMIENTOS:
-        i = col_letter_to_index(orig)
-        j = col_letter_to_index(dest)
-        if i < df.shape[1]:
-            result.iloc[:, j] = df.iloc[:, i]
-        else:
-            result.iloc[:, j] = None
+        st.subheader(f"📌 Vista previa – {uploaded.name}")
+        st.dataframe(df.head(5))
 
-    if result.shape[1] > len(header_list):
-        result = result.iloc[:, :len(header_list)]
-    result.columns = header_list[:result.shape[1]]
+        max_dest = max(col_letter_to_index(d) for _, d in MOVIMIENTOS)
+        result = pd.DataFrame(index=df.index, columns=range(max_dest + 1))
 
-    # Evita duplicados en encabezados
-    seen = {}
-    unique_cols = []
-    for col in result.columns:
-        if col not in seen:
-            seen[col] = 0
-            unique_cols.append(col)
-        else:
-            seen[col] += 1
-            unique_cols.append(f"{col} ({seen[col]})")
-    result.columns = unique_cols
+        for orig, dest in MOVIMIENTOS:
+            i = col_letter_to_index(orig)
+            j = col_letter_to_index(dest)
+            if i < df.shape[1]:
+                result.iloc[:, j] = df.iloc[:, i]
+            else:
+                result.iloc[:, j] = None
 
-    # Tipos: fechas, enteros, decimales
-    for c in DATE_COLS:
-        if c in result:
-            result[c] = pd.to_datetime(result[c], errors="coerce").dt.date
-    for letter in INT_LETTERS:
-        idx = col_letter_to_index(letter)
-        if idx < result.shape[1]:
-            result.iloc[:, idx] = pd.to_numeric(result.iloc[:, idx], errors="coerce").astype("Int64")
-    for letter in DEC_LETTERS:
-        idx = col_letter_to_index(letter)
-        if idx < result.shape[1]:
-            result.iloc[:, idx] = pd.to_numeric(result.iloc[:, idx], errors="coerce").round(2)
+        if result.shape[1] > len(header_list):
+            result = result.iloc[:, :len(header_list)]
+        result.columns = header_list[:result.shape[1]]
 
-    if "Report Status" in result and "Sample Status" in result:
-        result.loc[result["Report Status"].notna(), "Sample Status"] = "Completed"
+        # Evita duplicados en encabezados
+        seen = {}
+        unique_cols = []
+        for col in result.columns:
+            if col not in seen:
+                seen[col] = 0
+                unique_cols.append(col)
+            else:
+                seen[col] += 1
+                unique_cols.append(f"{col} ({seen[col]})")
+        result.columns = unique_cols
 
-    # Vista previa y descarga
-    st.subheader("✅ Vista previa – Archivo reordenado")
-    st.dataframe(result.head(10))
+        # Tipos: fechas, enteros, decimales
+        for c in DATE_COLS:
+            if c in result:
+                result[c] = pd.to_datetime(result[c], errors="coerce").dt.date
+        for letter in INT_LETTERS:
+            idx = col_letter_to_index(letter)
+            if idx < result.shape[1]:
+                result.iloc[:, idx] = pd.to_numeric(result.iloc[:, idx], errors="coerce").astype("Int64")
+        for letter in DEC_LETTERS:
+            idx = col_letter_to_index(letter)
+            if idx < result.shape[1]:
+                result.iloc[:, idx] = pd.to_numeric(result.iloc[:, idx], errors="coerce").round(2)
 
+        if "Report Status" in result and "Sample Status" in result:
+            result.loc[result["Report Status"].notna(), "Sample Status"] = "Completed"
+
+        # Agregar columna de origen al DataFrame final
+        result["Archivo_Origen"] = uploaded.name
+        df_consolidado = pd.concat([df_consolidado, result], ignore_index=True)
+
+    # Vista previa consolidada
+    st.subheader("✅ Vista previa – Archivo consolidado final")
+    st.dataframe(df_consolidado.head(10))
+
+    # Descarga del archivo consolidado
     buffer = BytesIO()
-    result.to_excel(buffer, index=False, engine="openpyxl")
+    df_consolidado.to_excel(buffer, index=False, engine="openpyxl")
     buffer.seek(0)
 
     st.download_button(
-        label="📥 Descargar Excel reordenado",
+        label="📥 Descargar Excel consolidado",
         data=buffer,
-        file_name="mobilserv_reordenado.xlsx",
+        file_name="mobilserv_consolidado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
