@@ -6,7 +6,7 @@ from io import BytesIO
 st.set_page_config(page_title="Reordenador Excel a formato MobilServ", layout="wide")
 
 st.markdown("**Creado por:** Javier Parada  \n**Ingeniero de Soporte en Campo**")
-st.title("Reordenador Excel a formato MobilServ – Múltiples Archivos (Solo Traslado de Datos)")
+st.title("Reordenador Excel a formato MobilServ – Múltiples Archivos (Encabezados RESULT vacíos)")
 
 # —————— Instrucciones ——————
 st.markdown("""
@@ -14,9 +14,9 @@ st.markdown("""
 1. Sube **uno o varios archivos Excel (.xlsx)**.
 2. El sistema combinará todos los archivos en un solo DataFrame.
 3. Verás una **vista previa de los datos combinados originales**.
-4. Luego, el sistema aplicará el **reordenamiento MobilServ**.
-5. Se mostrará la **vista previa del archivo ya ordenado**.
-6. Finalmente podrás **descargar el Excel final ordenado**.
+4. Luego, el sistema aplicará el **reordenamiento MobilServ** (las columnas `RESULT_XXX` solo son encabezados).
+5. Se mostrará la **vista previa final sin errores**.
+6. Finalmente podrás **descargar el Excel final MobilServ**.
 """)
 
 # —————— Utilitario: columna letra → índice ——————
@@ -26,7 +26,7 @@ def col_letter_to_index(letter: str) -> int:
         idx = idx * 26 + (ord(c) - ord("A") + 1)
     return idx - 1
 
-# —————— Mapeo actualizado ——————
+# —————— Mapeo columnas origen → MobilServ ——————
 mapping_text = """
 A W
 Y B
@@ -91,7 +91,7 @@ CE EP
 
 MOVIMIENTOS = [tuple(line.split()) for line in mapping_text.splitlines()]
 
-# —————— Encabezados destino MobilServ ——————
+# —————— Lista de encabezados MobilServ final ——————
 headerString = """Sample Status,Report Status,Date Reported,Asset ID,Unit ID,Unit Description,
 Asset Class,Position,Tested Lubricant,Service Level,Sample Bottle ID,Manufacturer,
 Alt Manufacturer,Model,Alt Model,Model Year,Serial Number,Account Name,Account ID,
@@ -123,11 +123,7 @@ Sample ID
 header_list = [h.strip() for h in headerString.split(",")]
 
 # —————— Subida de múltiples archivos ——————
-uploaded_files = st.file_uploader(
-    "📤 Sube uno o varios archivos Excel (.xlsx)",
-    type="xlsx",
-    accept_multiple_files=True
-)
+uploaded_files = st.file_uploader("📤 Sube uno o varios archivos Excel (.xlsx)", type="xlsx", accept_multiple_files=True)
 
 if uploaded_files:
     # 1️⃣ Combinar todos los archivos en un solo DataFrame
@@ -139,7 +135,7 @@ if uploaded_files:
 
     df_consolidado = pd.concat(dataframes, ignore_index=True)
 
-    # 2️⃣ Vista previa del DataFrame combinado original
+    # 2️⃣ Vista previa de datos originales combinados
     st.subheader("📌 Vista previa – Datos combinados originales")
     st.dataframe(df_consolidado.head(10))
 
@@ -155,27 +151,35 @@ if uploaded_files:
         else:
             result.iloc[:, j] = None
 
-    # Ajustar encabezados
+    # Ajustar encabezados al formato MobilServ
     if result.shape[1] > len(header_list):
         result = result.iloc[:, :len(header_list)]
     result.columns = header_list[:result.shape[1]]
 
-    # Agregar columna de origen
+    # 4️⃣ Crear versión temporal sin duplicados para la vista previa
+    preview_cols = []
+    seen = {}
+    for col in result.columns:
+        if col not in seen:
+            seen[col] = 0
+            preview_cols.append(col)
+        else:
+            seen[col] += 1
+            preview_cols.append(f"{col} ({seen[col]})")
+
+    st.subheader("✅ Vista previa – Archivo ya reordenado MobilServ")
+    st.dataframe(pd.DataFrame(result.head(10).values, columns=preview_cols))
+
+    # 5️⃣ Agregar columna de origen al final y descargar Excel final
     result["Archivo_Origen"] = df_consolidado["Archivo_Origen"]
 
-    # 4️⃣ Vista previa final ordenada
-    st.subheader("✅ Vista previa – Archivo ya reordenado MobilServ")
-    st.dataframe(result.head(10))
-
-    # 5️⃣ Descargar archivo final
     buffer = BytesIO()
     result.to_excel(buffer, index=False, engine="openpyxl")
     buffer.seek(0)
 
     st.download_button(
-        label="📥 Descargar Excel ordenado",
+        label="📥 Descargar Excel MobilServ final",
         data=buffer,
         file_name="mobilserv_ordenado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
