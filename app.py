@@ -93,8 +93,7 @@ CE EP
 MOVIMIENTOS = [tuple(line.split()) for line in mapping_text.splitlines()]
 
 # —————— Lista completa de encabezados MobilServ ——————
-# ⚠️ Aquí debes pegar la lista completa de encabezados en el mismo orden que enviaste.
-# Para abreviar en este ejemplo pongo un subset, pero en tu código final pega TODA la lista:
+# ⚠️ Sustituye esta lista con todos los encabezados MobilServ completos que enviaste
 header_list = [
     "Sample Status","Report Status","Date Reported","Asset ID","Unit ID","Unit Description",
     "Asset Class","Position","Tested Lubricant","Service Level","Sample Bottle ID","Manufacturer",
@@ -110,8 +109,7 @@ header_list = [
     "Reservoir Temp UOM","Total Engine Hours","Hrs. Since Last Overhaul","Oil Service Hours",
     "Used Oil Volume","Used Oil Volume UOM","Oil Used in Last 24Hrs","Oil Used in Last 24Hrs UOM",
     "Sulphur %","Engine Power at Sampling","Date Landed","Port Landed","Ag (Silver)","RESULT_Ag",
-    # ...
-    # ➜ PEGA AQUÍ TODA LA LISTA DE ENCABEZADOS COMPLETA QUE ME ENVIASTE
+    # ⚠️ Pega aquí toda la lista completa de columnas MobilServ que compartiste
 ]
 
 # Columnas de fecha
@@ -125,7 +123,7 @@ if uploaded_files:
     for uploaded in uploaded_files:
         df = pd.read_excel(uploaded, header=0, dtype=str)
 
-        # Validación simple de número de columnas
+        # Validación básica
         if df.shape[1] < len(MOVIMIENTOS):
             st.error(f"❌ El archivo `{uploaded.name}` tiene menos columnas de las esperadas.")
             st.stop()
@@ -133,13 +131,14 @@ if uploaded_files:
         df["Archivo_Origen"] = uploaded.name
         dataframes.append(df)
 
+    # 1️⃣ Combinar DataFrames
     df_consolidado = pd.concat(dataframes, ignore_index=True)
-
     st.subheader("📌 Vista previa – Datos combinados originales")
     st.dataframe(df_consolidado.head(10))
 
-    # —————— Crear DataFrame reordenado MobilServ ——————
-    result = pd.DataFrame(index=df_consolidado.index, columns=header_list)
+    # 2️⃣ Crear DataFrame por posiciones numéricas para usar iloc
+    max_dest = max(col_letter_to_index(d) for _, d in MOVIMIENTOS)
+    result = pd.DataFrame(index=df_consolidado.index, columns=range(max_dest + 1))
 
     for orig, dest in MOVIMIENTOS:
         i = col_letter_to_index(orig)
@@ -149,12 +148,19 @@ if uploaded_files:
         else:
             result.iloc[:, j] = None
 
-    # Agregar columna de archivo de origen
+    # 3️⃣ Asegurar que tenga todas las columnas MobilServ (vacías si no hay datos)
+    if result.shape[1] < len(header_list):
+        for _ in range(len(header_list) - result.shape[1]):
+            result[result.shape[1]] = None
+
+    result.columns = header_list[:result.shape[1]]
+
+    # 4️⃣ Agregar columna Archivo_Origen
     result["Archivo_Origen"] = df_consolidado["Archivo_Origen"]
 
-    # —————— Vista previa sin error de duplicados ——————
-    seen = {}
+    # 5️⃣ Vista previa sin error de duplicados
     preview_cols = []
+    seen = {}
     for col in result.columns:
         if col not in seen:
             seen[col] = 0
@@ -166,7 +172,7 @@ if uploaded_files:
     st.subheader("✅ Vista previa – Archivo reordenado MobilServ")
     st.dataframe(pd.DataFrame(result.head(10).values, columns=preview_cols))
 
-    # —————— Exportar Excel final ——————
+    # 6️⃣ Exportar Excel final
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
         # Convertir columnas de fecha a datetime para exportar como fecha real
@@ -192,5 +198,3 @@ if uploaded_files:
         file_name="mobilserv_ordenado.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-
