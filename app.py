@@ -24,7 +24,7 @@ def col_letter_to_index(letter: str) -> int:
         idx = idx * 26 + (ord(c) - ord("A") + 1)
     return idx - 1
 
-# —————— Mapeo actualizado ——————
+# —————— Mapeo actualizado (según tabla final) ——————
 mapping_text = """
 A W
 Y B
@@ -37,7 +37,6 @@ W O
 E AA
 F AB
 G AC
-C K
 I BB
 J BC
 K BD
@@ -84,6 +83,8 @@ CS HJ
 ER PI
 PH GZ
 PI HB
+C K
+CE EP
 """.strip()
 
 MOVIMIENTOS = [tuple(line.split()) for line in mapping_text.splitlines()]
